@@ -1,5 +1,6 @@
--- kzMapCosmetics: Version Quartz (1.0)
--- Body part exclusion for Dark Map | NGAFY (blackout body parts)
+-- kzMapCosmetics: Version Quartz (1.4)
+-- Config Tab REMOVED (was a test, not coming back)
+-- Clean version with Map, Fun, Scripts, Settings, Update Logs
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -57,7 +58,7 @@ local function IsBodyPart(part)
                 return true
             end
         end
-        if part:IsA("Accessory") or parent:FindFirstChild("Humanoid") and part:IsA("MeshPart") then
+        if part:IsA("Accessory") or (parent:FindFirstChild("Humanoid") and part:IsA("MeshPart")) then
             return true
         end
     end
@@ -76,7 +77,7 @@ RunService.RenderStepped:Connect(ApplyStretch)
 
 -- ========== KILL SWITCH ==========
 local function KillSwitch()
-    -- Restore dark map colors
+    -- Restore all dark map colors
     for obj, originalColor in pairs(originalColors) do
         pcall(function()
             if obj and obj.Parent then
@@ -96,6 +97,7 @@ local function KillSwitch()
     end
     originalBodyColors = {}
     
+    -- Restore lighting
     pcall(function()
         Lighting.Ambient = originalLighting.Ambient
         Lighting.FogColor = originalLighting.FogColor
@@ -103,20 +105,43 @@ local function KillSwitch()
         Lighting.FogStart = originalLighting.FogStart
     end)
     
+    -- Remove ColorCorrection effect
     local cc = Lighting:FindFirstChild("kzInvert")
     if cc then cc:Destroy() end
     
+    -- Destroy all overlays
     if invertOverlay then pcall(function() invertOverlay:Destroy() end) invertOverlay = nil end
     if spqrFrame then pcall(function() spqrFrame:Destroy() end) spqrFrame = nil end
     if rainbowOverlay then pcall(function() rainbowOverlay:Destroy() end) rainbowOverlay = nil end
     
+    -- Stop stretch
     stretchActive = false
     
+    -- Wait a moment
     task.wait(0.1)
     
+    -- DESTROY THE ENTIRE GUI COMPLETELY
     if ScreenGui then
         pcall(function() ScreenGui:Destroy() end)
     end
+    
+    -- Also destroy any stray frames
+    pcall(function()
+        local coreGui = game:GetService("CoreGui")
+        for _, v in pairs(coreGui:GetChildren()) do
+            if v.Name == "kzQuartz_Bulletproof" then
+                v:Destroy()
+            end
+        end
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if playerGui then
+            for _, v in pairs(playerGui:GetChildren()) do
+                if v.Name == "kzQuartz_Bulletproof" then
+                    v:Destroy()
+                end
+            end
+        end
+    end)
 end
 
 -- ========== SCREENGUI ==========
@@ -135,7 +160,7 @@ else
     ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- ========== TOGGLE KEY SYSTEM (FIXED) ==========
+-- ========== TOGGLE KEY SYSTEM ==========
 local ToggleKey = Enum.KeyCode.K
 local waitingForKey = false
 local keySelectionLabel = nil
@@ -153,9 +178,7 @@ local function SetToggleKey(keyCode)
     UpdateToggleKeyDisplay()
 end
 
--- FIXED: No gameProcessed check - keybind works everywhere
 UserInputService.InputBegan:Connect(function(input)
-    -- Handle key binding selection mode
     if waitingForKey and input.KeyCode ~= Enum.KeyCode.Unknown then
         waitingForKey = false
         SetToggleKey(input.KeyCode)
@@ -166,9 +189,8 @@ UserInputService.InputBegan:Connect(function(input)
         return
     end
     
-    -- Handle menu toggle (works 100% of the time)
     if input.KeyCode == ToggleKey then
-        if MainFrame then
+        if MainFrame and MainFrame.Parent then
             MainFrame.Visible = not MainFrame.Visible
         end
     end
@@ -177,8 +199,8 @@ end)
 -- ========== MAIN FRAME ==========
 local MainFrame = Instance.new("Frame")
 MainFrame.Parent = ScreenGui
-MainFrame.Size = UDim2.new(0, 500, 0, 580)
-MainFrame.Position = UDim2.new(0.5, -250, 0.5, -290)
+MainFrame.Size = UDim2.new(0, 500, 0, 650)
+MainFrame.Position = UDim2.new(0.5, -250, 0.5, -325)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
 MainFrame.BackgroundTransparency = 0.15
 MainFrame.Active = true
@@ -204,7 +226,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Parent = TitleBar
 TitleLabel.Size = UDim2.new(1, -50, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
-TitleLabel.Text = "kzMapCosmetics | Quartz (1.0)"
+TitleLabel.Text = "kzMapCosmetics | Quartz (1.4)"
 TitleLabel.TextColor3 = Color3.new(1, 1, 1)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.GothamBold
@@ -215,7 +237,7 @@ local SubtitleLabel = Instance.new("TextLabel")
 SubtitleLabel.Parent = TitleBar
 SubtitleLabel.Size = UDim2.new(1, -50, 0, 15)
 SubtitleLabel.Position = UDim2.new(0, 15, 0, 22)
-SubtitleLabel.Text = "Body Part Exclusion | NGAFY Blackout"
+SubtitleLabel.Text = "No Configs | Clean & Simple"
 SubtitleLabel.TextColor3 = Color3.fromRGB(160, 160, 180)
 SubtitleLabel.BackgroundTransparency = 1
 SubtitleLabel.Font = Enum.Font.Gotham
@@ -350,7 +372,12 @@ local function AddLabel(parent, text, yOffset)
     return lbl
 end
 
--- REAL SLIDER FUNCTION
+-- SLIDER FUNCTION
+local darkSliderFill = nil
+local darkSliderLabel = nil
+local stretchSliderFill = nil
+local stretchSliderLabel = nil
+
 local function AddSlider(parent, text, minVal, maxVal, defaultValue, yOffset, callback)
     local container = Instance.new("Frame")
     container.Parent = parent
@@ -368,6 +395,12 @@ local function AddSlider(parent, text, minVal, maxVal, defaultValue, yOffset, ca
     label.Font = Enum.Font.Gotham
     label.TextSize = 12
     label.TextXAlignment = "Left"
+    
+    if text == "Dark Intensity" then
+        darkSliderLabel = label
+    elseif text == "Stretch Shear" then
+        stretchSliderLabel = label
+    end
     
     local sliderBg = Instance.new("Frame")
     sliderBg.Parent = container
@@ -387,6 +420,12 @@ local function AddSlider(parent, text, minVal, maxVal, defaultValue, yOffset, ca
     local fillCorner = Instance.new("UICorner")
     fillCorner.Parent = sliderFill
     fillCorner.CornerRadius = UDim.new(1, 0)
+    
+    if text == "Dark Intensity" then
+        darkSliderFill = sliderFill
+    elseif text == "Stretch Shear" then
+        stretchSliderFill = sliderFill
+    end
     
     local dragging = false
     local currentValue = defaultValue
@@ -447,7 +486,6 @@ tabLogsBtn.MouseButton1Click:Connect(function() SetActiveTab(logsContent, tabLog
 -- ========== MAP TAB CONTENT ==========
 local yMap = 10
 
--- Dark Map Toggle button
 AddContentButton(mapContent, "Dark Map Toggle (Excludes Player Body Parts)", yMap, function()
     activeFeatures.darkMap = not activeFeatures.darkMap
     local mult = darkIntensity
@@ -472,7 +510,6 @@ AddContentButton(mapContent, "Dark Map Toggle (Excludes Player Body Parts)", yMa
 end)
 yMap = yMap + 45
 
--- Dark Intensity SLIDER
 AddSlider(mapContent, "Dark Intensity", 0.3, 1.0, darkIntensity, yMap, function(val)
     darkIntensity = val
     if activeFeatures.darkMap then
@@ -489,7 +526,6 @@ AddSlider(mapContent, "Dark Intensity", 0.3, 1.0, darkIntensity, yMap, function(
 end)
 yMap = yMap + 60
 
--- Gray Atmosphere Toggle button
 AddContentButton(mapContent, "Gray Atmosphere (Fog)", yMap, function()
     activeFeatures.grayAtmo = not activeFeatures.grayAtmo
     if activeFeatures.grayAtmo then
@@ -506,14 +542,12 @@ AddContentButton(mapContent, "Gray Atmosphere (Fog)", yMap, function()
 end)
 yMap = yMap + 45
 
--- Stretch Shear SLIDER
 AddSlider(mapContent, "Stretch Shear", 0.3, 2.5, stretchShear, yMap, function(val)
     stretchShear = val
     if stretchActive then ApplyStretch() end
 end)
 yMap = yMap + 60
 
--- Stretch Toggle button
 AddContentButton(mapContent, "Toggle Stretch Mode", yMap, function()
     stretchActive = not stretchActive
     activeFeatures.stretch = stretchActive
@@ -524,7 +558,6 @@ mapContent.CanvasSize = UDim2.new(0, 0, 0, yMap + 60)
 -- ========== FUN TAB CONTENT ==========
 local yFun = 10
 
--- NGAFY Button
 AddContentButton(funContent, "NGAFY (Blackout Body Parts)", yFun, function()
     activeFeatures.ngafy = not activeFeatures.ngafy
     
@@ -727,7 +760,7 @@ local function AddLogEntry(parent, version, date, changes, yPos)
     
     local changesLabel = Instance.new("TextLabel")
     changesLabel.Parent = parent
-    changesLabel.Size = UDim2.new(1, -20, 0, 60)
+    changesLabel.Size = UDim2.new(1, -20, 0, 80)
     changesLabel.Position = UDim2.new(0, 20, 0, yPos + 22)
     changesLabel.Text = changes
     changesLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
@@ -738,11 +771,23 @@ local function AddLogEntry(parent, version, date, changes, yPos)
     changesLabel.TextYAlignment = "Top"
     changesLabel.TextWrapped = true
     
-    return yPos + 90
+    return yPos + 110
 end
 
+yLogs = AddLogEntry(logsContent, "1.4", "2026-04-13", 
+    "• REMOVED: Config tab (was a test feature, will NOT be coming back)\n• Cleaner UI without config management\n• All other features remain unchanged", yLogs)
+
+yLogs = AddLogEntry(logsContent, "1.3", "2026-04-13", 
+    "• Named configs (TEST - REMOVED)\n• Config dropdown (TEST - REMOVED)\n• Kill switch completely destroys UI", yLogs)
+
+yLogs = AddLogEntry(logsContent, "1.2", "2026-04-13", 
+    "• Dedicated folder 'kzMapCosmetics' (REMOVED)\n• Auto-Load Config (TEST - REMOVED)", yLogs)
+
+yLogs = AddLogEntry(logsContent, "1.1", "2026-04-13", 
+    "• Config Tab (TEST - REMOVED)\n• JSON configs (TEST - REMOVED)", yLogs)
+
 yLogs = AddLogEntry(logsContent, "1.0", "2026-04-13", 
-    "• Dark Map now EXCLUDES player body parts\n• Added NGAFY button (blackout all body parts to 0,0,0)\n• Body parts stay black even when new players join\n• FIXED: Toggle keybind now works 100%\n• Map tab uses REAL drag sliders\n• Gray Atmosphere (Fog)\n• True Invert + SPQR + Rainbow\n• Custom toggle key binding\n• Kill Switch", yLogs)
+    "• Dark Map with body part exclusion\n• NGAFY (blackout body parts)\n• Gray Atmosphere (Fog)\n• True Invert + SPQR + Rainbow\n• Stretch shear slider\n• Custom toggle key binding\n• Kill Switch", yLogs)
 
 logsContent.CanvasSize = UDim2.new(0, 0, 0, yLogs + 20)
 
@@ -786,7 +831,7 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 MobileToggle.MouseButton1Click:Connect(function()
-    if MainFrame then
+    if MainFrame and MainFrame.Parent then
         MainFrame.Visible = not MainFrame.Visible
     end
 end)
